@@ -1,0 +1,7 @@
+Django==6.0.6
+pandas==2.3.3
+google-genai==2.8.0
+python-dotenv==1.0.1
+openpyxl==3.1.5
+pikepdf==10.0.2
+pdfplumber==0.11.7

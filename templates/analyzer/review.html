@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Review Upload - SmartBudget{% endblock %}
+{% block page_title %}Review imported transactions{% endblock %}
+{% block page_subtitle %}Approve suggestions, fix categories, create rules, trigger AI later, or delete wrong upload{% endblock %}
+{% block content %}
+<div class="card">
+    <p class="muted">Upload: {{ upload.file_name|default:upload.file.name }} | Status: {{ upload.status }} | Rows: {{ staging_rows|length }}</p>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-actions" style="margin-bottom:16px;">
+            <button class="btn btn-secondary" type="submit" name="action" value="process_ai">Process unresolved with AI</button>
+            <button class="btn btn-danger" type="submit" name="action" value="delete_upload">Delete this upload</button>
+            <button class="btn" type="submit" name="action" value="save">Approve and save</button>
+        </div>
+
+        <table>
+            <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Raw description</th>
+                <th>Payee</th>
+                <th>Amount</th>
+                <th>Suggested</th>
+                <th>Reason</th>
+                <th>Final category</th>
+                <th>Create rule</th>
+            </tr>
+            {% for txn in staging_rows %}
+            <tr>
+                <td>{{ txn.txn_date }}</td>
+                <td>
+                    {% if txn.txn_type %}
+                        {{ txn.txn_type }}
+                    {% else %}
+                        <span class="badge" style="background:#fef3c7;color:#92400e;border-color:#fde68a;">needs check</span>
+                    {% endif %}
+                </td>
+                <td>{{ txn.raw_description|default:txn.description }}</td>
+                <td>{{ txn.payee }}</td>
+                <td>{{ txn.amount }}</td>
+                <td>
+                    {% if txn.rule_category %}
+                        {{ txn.rule_category.group.name }} / {{ txn.rule_category.name }}<br>
+                        <span class="small muted">Rule match</span>
+                    {% elif txn.gemini_category %}
+                        {{ txn.gemini_category.group.name }} / {{ txn.gemini_category.name }}<br>
+                        <span class="small muted">AI suggestion</span>
+                    {% else %}
+                        <span class="small muted">Unknown</span>
+                    {% endif %}
+                </td>
+                <td>{{ txn.gemini_reason }}</td>
+                <td>
+                    <select name="category_{{ txn.id }}">
+                        <option value="">Select</option>
+                        {% for category in categories %}
+                        <option value="{{ category.id }}" {% if txn.final_category_id == category.id %}selected{% endif %}>
+                            {{ category.group.name }} / {{ category.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td><input type="checkbox" name="create_rule_{{ txn.id }}"></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </form>
+</div>
+{% endblock %}
+.message.info{border-color:#bfdbfe;background:#eff6ff;color:#1d4ed8}

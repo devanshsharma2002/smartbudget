@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Sign up - SmartBudget{% endblock %}
+{% block page_title %}Create account{% endblock %}
+{% block page_subtitle %}Start tracking statements and cash expenses{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px;">
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="form-actions">
+            <button class="btn" type="submit">Create account</button>
+            <a class="btn btn-secondary" href="{% url 'login' %}">Back to login</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

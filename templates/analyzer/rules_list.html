@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Rules - SmartBudget{% endblock %}
+{% block page_title %}Rules{% endblock %}
+{% block page_subtitle %}Map names, merchants, and narration patterns to categories{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="form-actions">
+        <a class="btn" href="{% url 'rule-create' %}">Add rule</a>
+    </div>
+    <table>
+        <tr>
+            <th>Priority</th><th>Name</th><th>Keyword</th><th>Field</th><th>Match</th><th>Txn type</th><th>Category</th><th>Status</th><th>Actions</th>
+        </tr>
+        {% for rule in rules %}
+        <tr>
+            <td>{{ rule.priority }}</td>
+            <td>{{ rule.name }}</td>
+            <td>{{ rule.keyword }}</td>
+            <td>{{ rule.applies_to }}</td>
+            <td>{{ rule.match_type }}</td>
+            <td>{{ rule.txn_type|default:"any" }}</td>
+            <td>{{ rule.category.group.name }} / {{ rule.category.name }}</td>
+            <td>{% if rule.is_active %}Active{% else %}Inactive{% endif %}</td>
+            <td class="inline-actions">
+                <a class="btn btn-secondary" href="{% url 'rule-update' rule.id %}">Edit</a>
+                <a class="btn btn-danger" href="{% url 'rule-delete' rule.id %}">Delete</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9">No rules yet.</td></tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}

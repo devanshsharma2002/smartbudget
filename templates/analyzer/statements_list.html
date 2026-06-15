@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Statements - SmartBudget{% endblock %}
+{% block page_title %}Statements{% endblock %}
+{% block page_subtitle %}Manage uploaded bank statements{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="form-actions">
+        <a class="btn" href="{% url 'upload-statement' %}">Upload new statement</a>
+    </div>
+    <table>
+        <tr><th>Uploaded</th><th>File</th><th>Status</th><th>Notes</th><th>Actions</th></tr>
+        {% for upload in uploads %}
+        <tr>
+            <td>{{ upload.uploaded_at|date:"d M Y H:i" }}</td>
+            <td>{{ upload.file_name|default:upload.file.name }}</td>
+            <td>{{ upload.status }}</td>
+            <td>{{ upload.notes }}</td>
+            <td class="inline-actions">
+                {% if upload.status == "review" %}
+                    <a class="btn btn-secondary" href="{% url 'review-upload' upload.id %}">Review</a>
+                {% endif %}
+                <a class="btn btn-danger" href="{% url 'statement-delete' upload.id %}">Delete</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5">No statements uploaded yet.</td></tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}

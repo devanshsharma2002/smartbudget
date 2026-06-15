@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Transactions - SmartBudget{% endblock %}
+{% block page_title %}Transactions{% endblock %}
+{% block page_subtitle %}Filter, edit, delete, or bulk delete transactions{% endblock %}
+{% block content %}
+<div class="card">
+    <form method="get">
+        <div class="triple">
+            <div>
+                <label>Category</label>
+                <select name="category">
+                    <option value="">All categories</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" {% if selected_category == category.id|stringformat:"s" %}selected{% endif %}>
+                        {{ category.group.name }} / {{ category.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Type</label>
+                <select name="txn_type">
+                    <option value="">Any</option>
+                    <option value="credit" {% if selected_txn_type == "credit" %}selected{% endif %}>Credit</option>
+                    <option value="debit" {% if selected_txn_type == "debit" %}selected{% endif %}>Debit</option>
+                </select>
+            </div>
+            <div>
+                <label>Source</label>
+                <select name="source_type">
+                    <option value="">Any</option>
+                    <option value="bank" {% if selected_source_type == "bank" %}selected{% endif %}>Bank</option>
+                    <option value="cash" {% if selected_source_type == "cash" %}selected{% endif %}>Cash</option>
+                    <option value="manual" {% if selected_source_type == "manual" %}selected{% endif %}>Manual</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn" type="submit">Apply filters</button>
+            <a class="btn btn-secondary" href="{% url 'transactions-list' %}">Reset</a>
+            <a class="btn btn-secondary" href="{% url 'transaction-create' %}">Add entry</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <form method="post" action="{% url 'transactions-bulk-delete' %}" onsubmit="return confirm('Delete selected transactions?');">
+        {% csrf_token %}
+
+        <div class="form-actions">
+            <button class="btn btn-danger" type="submit">Delete selected</button>
+            <button class="btn btn-secondary" type="button" onclick="toggleAll(true)">Select all</button>
+            <button class="btn btn-secondary" type="button" onclick="toggleAll(false)">Clear selection</button>
+        </div>
+
+        <table>
+            <tr>
+                <th><input type="checkbox" onclick="masterToggle(this)"></th>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Source</th>
+                <th>Amount</th>
+                <th>Payee</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Actions</th>
+            </tr>
+            {% for txn in transactions %}
+            <tr>
+                <td><input type="checkbox" name="selected_transactions" value="{{ txn.id }}" class="txn-check"></td>
+                <td>{{ txn.txn_date }}</td>
+                <td>{{ txn.txn_type }}</td>
+                <td>{{ txn.source_type }}</td>
+                <td>{{ txn.amount }}</td>
+                <td>{{ txn.payee }}</td>
+                <td>{{ txn.description|default:txn.raw_description|truncatechars:55 }}</td>
+                <td>{% if txn.category %}{{ txn.category.group.name }} / {{ txn.category.name }}{% endif %}</td>
+                <td class="inline-actions">
+                    <a class="btn btn-secondary" href="{% url 'transaction-update' txn.id %}">Edit</a>
+                    <a class="btn btn-secondary" href="{% url 'transaction-create-rule' txn.id %}">Make rule</a>
+                    <a class="btn btn-danger" href="{% url 'transaction-delete' txn.id %}">Delete</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="9">No transactions found.</td></tr>
+            {% endfor %}
+        </table>
+    </form>
+</div>
+
+<script>
+function toggleAll(state) {
+    document.querySelectorAll('.txn-check').forEach(cb => cb.checked = state);
+}
+function masterToggle(source) {
+    document.querySelectorAll('.txn-check').forEach(cb => cb.checked = source.checked);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SmartBudget{% endblock %}</title>
+    <style>
+        :root{
+            --bg:#f4f7fb;
+            --panel:#ffffff;
+            --soft:#f8fafc;
+            --text:#122033;
+            --muted:#64748b;
+            --border:#dbe3ef;
+            --primary:#0f766e;
+            --primary-dark:#0b5f58;
+            --accent:#1d4ed8;
+            --success:#166534;
+            --warning:#92400e;
+            --danger:#b91c1c;
+            --shadow:0 10px 25px rgba(15, 23, 42, 0.08);
+            --radius:16px;
+        }
+        *{box-sizing:border-box}
+        body{
+            margin:0;
+            font-family:Inter, Arial, sans-serif;
+            background:linear-gradient(180deg,#eef4fb 0%,#f7fafc 100%);
+            color:var(--text);
+        }
+        a{text-decoration:none;color:inherit}
+        .shell{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+        .sidebar{
+            background:#0f172a;
+            color:#e2e8f0;
+            padding:24px 18px;
+            position:sticky;top:0;height:100vh;
+        }
+        .brand{font-size:24px;font-weight:800;margin-bottom:8px}
+        .tag{font-size:13px;color:#94a3b8;margin-bottom:24px}
+        .nav a{
+            display:block;padding:12px 14px;border-radius:12px;margin-bottom:8px;
+            background:transparent;color:#e2e8f0;border:1px solid transparent;
+        }
+        .nav a:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.08)}
+        .main{padding:22px}
+        .topbar{
+            display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:22px;
+        }
+        .top-actions{display:flex;gap:10px;flex-wrap:wrap}
+        .btn{
+            display:inline-flex;align-items:center;justify-content:center;
+            background:var(--primary);color:white;border:none;border-radius:12px;
+            padding:10px 14px;font-weight:700;cursor:pointer;
+            box-shadow:var(--shadow);
+        }
+        .btn:hover{background:var(--primary-dark)}
+        .btn-secondary{background:#e2e8f0;color:#0f172a;box-shadow:none}
+        .btn-secondary:hover{background:#cbd5e1}
+        .btn-danger{background:var(--danger)}
+        .container-grid{display:grid;gap:18px}
+        .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+        .card{
+            background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+            padding:18px;box-shadow:var(--shadow);
+        }
+        .metric .label{font-size:13px;color:var(--muted);margin-bottom:8px}
+        .metric .value{font-size:28px;font-weight:800}
+        .metric .sub{font-size:13px;color:var(--muted);margin-top:6px}
+        .split{display:grid;grid-template-columns:1.3fr 1fr;gap:18px}
+        .triple{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+        table{width:100%;border-collapse:collapse}
+        th,td{padding:11px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+        th{font-size:13px;color:var(--muted);font-weight:700}
+        .badge{
+            display:inline-block;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:700;
+            background:#ecfeff;color:#155e75;border:1px solid #bae6fd;
+        }
+        .muted{color:var(--muted)}
+        .messages{margin-bottom:16px}
+        .message{padding:12px 14px;border-radius:12px;margin-bottom:10px;background:#fff;border:1px solid var(--border)}
+        .message.success{border-color:#bbf7d0;background:#f0fdf4;color:var(--success)}
+        .message.error{border-color:#fecaca;background:#fef2f2;color:var(--danger)}
+        .message.warning{border-color:#fde68a;background:#fffbeb;color:var(--warning)}
+        input,select,textarea{
+            width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--border);background:#fff;color:var(--text)
+        }
+        label{font-weight:700;font-size:14px}
+        form p{margin-bottom:14px}
+        .page-title{margin:0;font-size:30px}
+        .subtitle{margin-top:6px;color:var(--muted)}
+        .inline-actions{display:flex;gap:8px;flex-wrap:wrap}
+        .empty{padding:22px;text-align:center;color:var(--muted)}
+        .form-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+        .small{font-size:12px}
+        @media (max-width:1100px){
+            .metrics{grid-template-columns:repeat(2,1fr)}
+            .split,.triple{grid-template-columns:1fr}
+            .shell{grid-template-columns:1fr}
+            .sidebar{position:relative;height:auto}
+        }
+        @media (max-width:640px){
+            .metrics{grid-template-columns:1fr}
+            .main{padding:14px}
+            .page-title{font-size:24px}
+        }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <aside class="sidebar">
+        <div class="brand">SmartBudget</div>
+        <div class="tag">Daily spending intelligence</div>
+
+        <nav class="nav">
+            <a href="{% url 'dashboard' %}">Dashboard</a>
+            <a href="{% url 'upload-statement' %}">Upload statement</a>
+            <a href="{% url 'statements-list' %}">Statements</a>
+            <a href="{% url 'transactions-list' %}">Transactions</a>
+            <a href="{% url 'transaction-create' %}">Add cash/manual entry</a>
+            <a href="{% url 'rules-list' %}">Rules</a>
+            <a href="{% url 'rule-create' %}">Add rule</a>
+            <a href="{% url 'export-csv' %}">Export CSV</a>
+        </nav>
+    </aside>
+
+    <main class="main">
+        <div class="topbar">
+            <div>
+                <h1 class="page-title">{% block page_title %}SmartBudget{% endblock %}</h1>
+                <div class="subtitle">{% block page_subtitle %}Personal finance workspace{% endblock %}</div>
+            </div>
+            <div class="top-actions">
+                {% if user.is_authenticated %}
+                    <span class="badge">{{ user.username }}</span>
+                    <a class="btn btn-secondary" href="{% url 'transaction-create' %}">+ Manual Entry</a>
+                    <a class="btn" href="{% url 'upload-statement' %}">+ Upload</a>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button class="btn btn-secondary" type="submit">Logout</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+</div>
+</body>
+</html>

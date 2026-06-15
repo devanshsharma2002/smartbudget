@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Upload Statement - SmartBudget{% endblock %}
+{% block page_title %}Upload statement{% endblock %}
+{% block page_subtitle %}Import SBI CSV or password-protected PDF and auto-categorize using rules first{% endblock %}
+{% block content %}
+<div class="card" style="max-width:760px;">
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="form-actions">
+            <button class="btn" type="submit">Upload and process</button>
+            <a class="btn btn-secondary" href="{% url 'statements-list' %}">View statements</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

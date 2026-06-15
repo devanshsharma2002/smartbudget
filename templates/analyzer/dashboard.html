@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - SmartBudget{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}See how money moves across your accounts, cash, and people{% endblock %}
+{% block content %}
+<div class="container-grid">
+    <div class="metrics">
+        <div class="card metric">
+            <div class="label">Total income</div>
+            <div class="value">{{ income_total }}</div>
+            <div class="sub">Across all saved transactions</div>
+        </div>
+        <div class="card metric">
+            <div class="label">Total expense</div>
+            <div class="value">{{ expense_total }}</div>
+            <div class="sub">Across all saved transactions</div>
+        </div>
+        <div class="card metric">
+            <div class="label">This month expense</div>
+            <div class="value">{{ month_expense }}</div>
+            <div class="sub">Current month outflow</div>
+        </div>
+        <div class="card metric">
+            <div class="label">Active rules</div>
+            <div class="value">{{ rules_count }}</div>
+            <div class="sub">Automation strength</div>
+        </div>
+    </div>
+
+    <div class="split">
+        <div class="card">
+            <h3>Category insights</h3>
+            {% if biggest_category %}
+                <p><strong>Largest category:</strong> {{ biggest_category.category__group__name }} / {{ biggest_category.category__name }} — {{ biggest_category.total_amount }}</p>
+            {% endif %}
+            <table>
+                <tr><th>Group</th><th>Category</th><th>Txns</th><th>Total</th></tr>
+                {% for row in category_summary %}
+                <tr>
+                    <td>{{ row.category__group__name }}</td>
+                    <td>{{ row.category__name }}</td>
+                    <td>{{ row.txn_count }}</td>
+                    <td>{{ row.total_amount }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4">No data yet.</td></tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Monthly trend</h3>
+            <table>
+                <tr><th>Month</th><th>Transactions</th><th>Total</th></tr>
+                {% for row in monthly_trend %}
+                <tr>
+                    <td>{{ row.month|date:"M Y" }}</td>
+                    <td>{{ row.txn_count }}</td>
+                    <td>{{ row.total_amount }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3">No monthly data yet.</td></tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <div class="triple">
+        <div class="card">
+            <h3>Top payees</h3>
+            <table>
+                <tr><th>Payee</th><th>Txns</th><th>Total</th></tr>
+                {% for row in top_payees %}
+                <tr>
+                    <td>{{ row.payee }}</td>
+                    <td>{{ row.txn_count }}</td>
+                    <td>{{ row.total_amount }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3">No payees yet.</td></tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Quick health</h3>
+            <p><strong>Net total:</strong> {{ net_total }}</p>
+            <p><strong>This month income:</strong> {{ month_income }}</p>
+            <p><strong>Total transactions:</strong> {{ txn_count }}</p>
+            <p><strong>Uncategorized:</strong> {{ uncategorized_count }}</p>
+            <div class="form-actions">
+                <a class="btn" href="{% url 'rule-create' %}">Add rule</a>
+                <a class="btn btn-secondary" href="{% url 'export-csv' %}">Export CSV</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Recent uploads</h3>
+            <table>
+                <tr><th>Date</th><th>File</th><th>Status</th></tr>
+                {% for upload in uploads %}
+                <tr>
+                    <td>{{ upload.uploaded_at|date:"d M Y H:i" }}</td>
+                    <td>{{ upload.file_name|default:upload.file.name }}</td>
+                    <td>{{ upload.status }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3">No uploads yet.</td></tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Recent transactions</h3>
+        <table>
+            <tr><th>Date</th><th>Type</th><th>Source</th><th>Payee</th><th>Description</th><th>Amount</th><th>Category</th></tr>
+            {% for txn in recent_transactions %}
+            <tr>
+                <td>{{ txn.txn_date }}</td>
+                <td>{{ txn.txn_type }}</td>
+                <td>{{ txn.source_type }}</td>
+                <td>{{ txn.payee }}</td>
+                <td>{{ txn.description|default:txn.raw_description|truncatechars:60 }}</td>
+                <td>{{ txn.amount }}</td>
+                <td>{% if txn.category %}{{ txn.category.group.name }} / {{ txn.category.name }}{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7">No transactions yet.</td></tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+{% endblock %}

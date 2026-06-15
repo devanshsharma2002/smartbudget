@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - SmartBudget{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block page_subtitle %}Add or edit a manual, cash, or corrected transaction{% endblock %}
+{% block content %}
+<div class="card" style="max-width:860px;">
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="form-actions">
+            <button class="btn" type="submit">Save transaction</button>
+            <a class="btn btn-secondary" href="{% url 'transactions-list' %}">Back</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Export CSV - SmartBudget{% endblock %}
+{% block page_title %}Export CSV{% endblock %}
+{% block page_subtitle %}Choose any custom duration and filters before downloading{% endblock %}
+{% block content %}
+<div class="card">
+    <form method="get">
+        {{ form.as_p }}
+        <div class="form-actions">
+            <button class="btn" type="submit">Preview</button>
+            <button class="btn btn-secondary" type="submit" name="download" value="1">Download CSV</button>
+        </div>
+    </form>
+</div>
+
+{% if rows is not None %}
+<div class="card">
+    <h3>Preview</h3>
+    <table>
+        <tr><th>Date</th><th>Type</th><th>Source</th><th>Amount</th><th>Payee</th><th>Description</th><th>Category</th></tr>
+        {% for txn in rows %}
+        <tr>
+            <td>{{ txn.txn_date }}</td>
+            <td>{{ txn.txn_type }}</td>
+            <td>{{ txn.source_type }}</td>
+            <td>{{ txn.amount }}</td>
+            <td>{{ txn.payee }}</td>
+            <td>{{ txn.description|default:txn.raw_description|truncatechars:60 }}</td>
+            <td>{% if txn.category %}{{ txn.category.group.name }} / {{ txn.category.name }}{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7">No transactions found for this filter.</td></tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+{% endblock %}
