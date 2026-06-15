@@ -5,17 +5,21 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-change-this")
-DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-local-dev-key")
+DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+CSRF_TRUSTED_ORIGINS = [
+    x.strip()
+    for x in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if x.strip()
+]
 
-CSRF_TRUSTED_ORIGINS = (
-    os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
-    if os.getenv("CSRF_TRUSTED_ORIGINS")
-    else []
-)
-
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+USE_GEMINI_FALLBACK = os.environ.get("USE_GEMINI_FALLBACK", "True").lower() == "true"
+GEMINI_TIMEOUT_MS = int(os.environ.get("GEMINI_TIMEOUT_MS", "120000"))
+GEMINI_BATCH_SIZE = int(os.environ.get("GEMINI_BATCH_SIZE", "10"))
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",

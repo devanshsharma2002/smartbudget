@@ -14,6 +14,7 @@ import pdfplumber
 import pikepdf
 from django.conf import settings
 from google import genai
+from google.genai import types
 
 from .models import Category, CategoryRule, Transaction, TransactionStaging
 
@@ -28,6 +29,12 @@ BANK_PREFIX_PATTERNS = [
     r"^MB[:/\- ]",
     r"^POS[:/\- ]",
 ]
+
+GENERIC_UPI_TOKENS = {
+    "UPI", "DR", "CR", "PAY", "PAYMENT", "COLLECT",
+    "HDFC", "SBI", "ICICI", "AXIS", "KOTAK", "PNB",
+    "YBL", "IBIBO", "OKHDFC", "OKSBI", "OKICICI"
+}
 
 
 def normalize_text(value):
@@ -90,14 +97,6 @@ def clean_description(text):
     return text
 
 
-import re
-
-GENERIC_UPI_TOKENS = {
-    "UPI", "DR", "CR", "PAY", "PAYMENT", "COLLECT",
-    "HDFC", "SBI", "ICICI", "AXIS", "KOTAK", "PNB",
-    "YBL", "IBIBO", "OKHDFC", "OKSBI", "OKICICI"
-}
-
 def extract_payee(raw_description):
     raw = safe_text(raw_description)
     if not raw:
@@ -107,8 +106,8 @@ def extract_payee(raw_description):
 
     if upper.startswith("UPI/"):
         parts = [p.strip() for p in raw.split("/") if p.strip()]
-
         filtered = []
+
         for p in parts:
             pu = p.upper()
 
@@ -126,6 +125,7 @@ def extract_payee(raw_description):
 
     cleaned = re.sub(r"\b(UPI|DR|CR)\b", "", raw, flags=re.I).strip(" /-")
     return cleaned[:80]
+
 
 def make_fingerprint(txn_date, amount, txn_type, raw_description, description, payee, notes=""):
     raw = "|".join([
@@ -146,6 +146,7 @@ def compute_file_hash(file_field):
     for chunk in file_field.chunks():
         h.update(chunk)
     return h.hexdigest()
+
 
 def detect_amount_and_type(row):
     raw_description = safe_text(
@@ -207,6 +208,8 @@ def detect_amount_and_type(row):
         return amount, ""
 
     return Decimal("0.00"), ""
+
+
 def get_or_create_staging_row(upload, source_type, txn_date, amount, txn_type, raw_description, description, payee, notes, raw_data):
     fingerprint = make_fingerprint(txn_date, amount, txn_type, raw_description, description, payee, notes)
     txn, created = TransactionStaging.objects.get_or_create(
@@ -256,8 +259,7 @@ def parse_csv_statement(upload):
         )
         if created:
             created_rows.append(txn)
-        print("RAW:", raw_description, "| AMOUNT:", amount, "| TYPE:", txn_type)
-        
+
     return list(upload.staging_transactions.all()) if not created_rows else created_rows
 
 
@@ -274,6 +276,7 @@ def decrypt_pdf_to_temp(uploaded_file, password):
         pdf.save(output_path)
 
     return input_path, output_path
+
 
 def extract_transactions_from_text(text):
     transactions = []
@@ -333,6 +336,7 @@ def extract_transactions_from_text(text):
         previous_balance = balance
 
     return transactions
+
 
 def parse_pdf_statement(upload, password):
     input_path, decrypted_path = decrypt_pdf_to_temp(upload.file, password)
@@ -455,42 +459,15 @@ def apply_rules(user, staging_rows):
 
 
 def gemini_client():
-    return genai.Client(api_key=settings.GEMINI_API_KEY)
-
-
-def run_ai_categorization(user, unknown_rows, force=False):
-    if not getattr(settings, "USE_GEMINI_FALLBACK", False) and not force:
-        return {"status": "disabled", "message": "AI fallback is disabled.", "processed": 0}
-
-    if not settings.GEMINI_API_KEY:
-        return {"status": "disabled", "message": "Gemini API key is missing.", "processed": 0}
-
-    unknown_rows = [row for row in unknown_rows if not row.final_category]
-    if not unknown_rows:
-        return {"status": "empty", "message": "No unresolved transactions to process.", "processed": 0}
-
-    categories = list(
-        Category.objects.filter(is_active=True)
-        .select_related("group")
-        .values("id", "name", "group__name")
+    timeout_ms = int(getattr(settings, "GEMINI_TIMEOUT_MS", 120000))
+    return genai.Client(
+        api_key=settings.GEMINI_API_KEY,
+        http_options=types.HttpOptions(timeout=timeout_ms),
     )
 
-    allowed_text = "\n".join([f'{c["id"]}: {c["group__name"]} > {c["name"]}' for c in categories])
 
-    txns_payload = []
-    for txn in unknown_rows[:50]:
-        txns_payload.append({
-            "staging_id": txn.id,
-            "raw_description": txn.raw_description,
-            "description": txn.description,
-            "payee": txn.payee,
-            "notes": txn.notes,
-            "amount": str(txn.amount),
-            "txn_type": txn.txn_type,
-            "source_type": txn.source_type,
-        })
-
-    prompt = f"""
+def _build_gemini_prompt(allowed_text, txns_payload):
+    return f"""
 You are classifying personal finance transactions.
 
 Use the full raw_description as the primary clue.
@@ -509,59 +486,138 @@ Each item must be:
 }}
 
 Transactions:
-{json.dumps(txns_payload)}
+{json.dumps(txns_payload, ensure_ascii=False)}
 """
 
+
+def _parse_gemini_json(text):
+    text = safe_text(text)
+    if not text:
+        return []
+
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines.startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        text = text[start:end + 1]
+
+    return json.loads(text)
+
+
+def run_ai_categorization(user, unknown_rows, force=False):
+    if not getattr(settings, "USE_GEMINI_FALLBACK", False) and not force:
+        return {"status": "disabled", "message": "AI fallback is disabled.", "processed": 0}
+
+    if not getattr(settings, "GEMINI_API_KEY", ""):
+        return {"status": "disabled", "message": "Gemini API key is missing.", "processed": 0}
+
+    unknown_rows = [row for row in unknown_rows if not row.final_category]
+    if not unknown_rows:
+        return {"status": "empty", "message": "No unresolved transactions to process.", "processed": 0}
+
+    categories = list(
+        Category.objects.filter(is_active=True)
+        .select_related("group")
+        .values("id", "name", "group__name")
+    )
+    allowed_text = "\n".join([f'{c["id"]}: {c["group__name"]} > {c["name"]}' for c in categories])
+
     category_map = {c.id: c for c in Category.objects.all()}
-    txn_map = {t.id: t for t in unknown_rows}
+    total_processed = 0
     last_error = None
+    batch_size = int(getattr(settings, "GEMINI_BATCH_SIZE", 10))
 
-    for attempt in range(3):
-        try:
-            client = gemini_client()
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-            )
+    for start in range(0, len(unknown_rows), batch_size):
+        batch = unknown_rows[start:start + batch_size]
+        txn_map = {t.id: t for t in batch}
 
-            text = response.text.strip()
-            if text.startswith("```"):
-                text = text.strip("`")
-                text = text.replace("json", "", 1).strip()
+        txns_payload = []
+        for txn in batch:
+            txns_payload.append({
+                "staging_id": txn.id,
+                "raw_description": txn.raw_description,
+                "description": txn.description,
+                "payee": txn.payee,
+                "notes": txn.notes,
+                "amount": str(txn.amount),
+                "txn_type": txn.txn_type,
+                "source_type": txn.source_type,
+            })
 
-            predictions = json.loads(text)
-            processed = 0
+        prompt = _build_gemini_prompt(allowed_text, txns_payload)
 
-            for item in predictions:
-                txn = txn_map.get(item["staging_id"])
-                category = category_map.get(item["category_id"])
-                if txn and category:
-                    txn.gemini_category = category
-                    txn.final_category = txn.final_category or category
-                    txn.gemini_confidence = float(item.get("confidence", 0))
-                    txn.gemini_reason = item.get("reason", "")
-                    txn.needs_review = True
-                    txn.save()
-                    processed += 1
+        batch_processed = False
 
-            return {"status": "success", "message": f"AI processed {processed} transactions.", "processed": processed}
+        for attempt in range(3):
+            try:
+                client = gemini_client()
+                response = client.models.generate_content(
+                    model=getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
+                    contents=prompt,
+                )
 
-        except Exception as e:
-            last_error = str(e)
-            transient = "503" in last_error or "UNAVAILABLE" in last_error or "429" in last_error
-            if transient and attempt < 2:
-                delay = (2 ** attempt) + random.uniform(0, 0.75)
-                time.sleep(delay)
-                continue
-            break
+                predictions = _parse_gemini_json(getattr(response, "text", "") or "")
+                processed_this_batch = 0
 
-    for txn in unknown_rows:
-        txn.needs_review = True
-        if not txn.gemini_reason:
-            txn.gemini_reason = f"AI unavailable, manual review required. Last error: {last_error}"
-        txn.save()
+                for item in predictions:
+                    txn = txn_map.get(item.get("staging_id"))
+                    category = category_map.get(item.get("category_id"))
+                    if txn and category:
+                        txn.gemini_category = category
+                        txn.final_category = txn.final_category or category
+                        txn.gemini_confidence = float(item.get("confidence", 0) or 0)
+                        txn.gemini_reason = safe_text(item.get("reason", ""))
+                        txn.needs_review = True
+                        txn.save()
+                        processed_this_batch += 1
 
-    return {"status": "failed", "message": f"AI could not process now: {last_error}", "processed": 0}
+                total_processed += processed_this_batch
+                batch_processed = True
+                break
+
+            except Exception as e:
+                last_error = str(e)
+                transient = (
+                    "503" in last_error
+                    or "UNAVAILABLE" in last_error.upper()
+                    or "429" in last_error
+                    or "TIMEOUT" in last_error.upper()
+                    or "DEADLINE" in last_error.upper()
+                )
+                if transient and attempt < 2:
+                    delay = (2 ** attempt) + random.uniform(0, 0.75)
+                    time.sleep(delay)
+                    continue
+                break
+
+        if not batch_processed:
+            for txn in batch:
+                txn.needs_review = True
+                if not txn.gemini_reason:
+                    txn.gemini_reason = f"AI unavailable, manual review required. Last error: {last_error}"
+                txn.save()
+
+    if total_processed:
+        return {
+            "status": "success",
+            "message": f"AI processed {total_processed} transactions.",
+            "processed": total_processed,
+        }
+
+    return {
+        "status": "failed",
+        "message": f"AI could not process now: {last_error}",
+        "processed": 0,
+    }
 
 
 def predict_unknown_transactions(user, unknown_rows):
@@ -592,7 +648,7 @@ def learn_rule_from_transaction(user, txn):
     if "*" in base_text:
         base_text = base_text.split("*")
 
-    keyword = normalize_text(base_text.strip())
+    keyword = normalize_text(base_text)
     if not keyword:
         keyword = normalize_text(source_text)
 
@@ -632,7 +688,13 @@ def finalize_staging_transactions(user, upload, staging_rows):
             continue
 
         fingerprint = txn.fingerprint or make_fingerprint(
-            txn.txn_date, txn.amount, txn.txn_type, txn.raw_description, txn.description, txn.payee, txn.notes
+            txn.txn_date,
+            txn.amount,
+            txn.txn_type,
+            txn.raw_description,
+            txn.description,
+            txn.payee,
+            txn.notes,
         )
 
         existing = Transaction.objects.filter(user=user, fingerprint=fingerprint).first()
