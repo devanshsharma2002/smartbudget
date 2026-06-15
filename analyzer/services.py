@@ -54,7 +54,6 @@ def safe_text(value):
         return ""
     return str(value).strip()
 
-
 def parse_date(value):
     value = safe_text(value)
     if not value:
@@ -102,6 +101,12 @@ def extract_payee(raw_description):
     if not raw:
         return ""
 
+    if isinstance(raw, list):
+        raw = " ".join(str(x) for x in raw if x is not None).strip()
+
+    if not isinstance(raw, str):
+        raw = str(raw)
+
     upper = raw.upper()
 
     if upper.startswith("UPI/"):
@@ -110,14 +115,12 @@ def extract_payee(raw_description):
 
         for p in parts:
             pu = p.upper()
-
             if pu in GENERIC_UPI_TOKENS:
                 continue
             if re.fullmatch(r"\d{6,}", p):
                 continue
             if re.fullmatch(r"[A-Za-z]{2,}\d{2,}", p):
                 continue
-
             filtered.append(p)
 
         if filtered:
@@ -644,9 +647,9 @@ def learn_rule_from_transaction(user, txn):
 
     base_text = source_text
     if "/" in base_text:
-        base_text = base_text.split("/")
+        base_text = base_text.split("/")[0]
     if "*" in base_text:
-        base_text = base_text.split("*")
+        base_text = base_text.split("*")[0]
 
     keyword = normalize_text(base_text)
     if not keyword:

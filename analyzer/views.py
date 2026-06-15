@@ -7,6 +7,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.views import LoginView
+from django.db import transaction
 from django.db.models import Count, Sum
 from django.db.models.functions import TruncMonth
 from django.http import HttpResponse
@@ -228,11 +229,6 @@ def review_upload_ai(request, upload_id):
 @login_required
 def review_upload(request, upload_id):
     upload = get_object_or_404(StatementUpload, id=upload_id, user=request.user)
-    staging_rows = upload.staging_transactions.select_related(
-        "rule_category", "gemini_category", "final_category",
-        "rule_category__group", "gemini_category__group", "final_category__group"
-    ).all()
-    categories = Category.objects.filter(is_active=True).select_related("group").order_by("group__name", "name")
 
     if request.method == "POST":
         action = request.POST.get("action", "save")
@@ -253,24 +249,40 @@ def review_upload(request, upload_id):
         if action == "delete_upload":
             return redirect("statement-delete", pk=upload.id)
 
-        for txn in staging_rows:
-            selected = request.POST.get(f"category_{txn.id}")
-            create_rule = request.POST.get(f"create_rule_{txn.id}") == "on"
+        staging_rows = list(
+            upload.staging_transactions.select_related(
+                "rule_category", "gemini_category", "final_category",
+                "rule_category__group", "gemini_category__group", "final_category__group"
+            ).all()
+        )
 
-            if selected:
-                txn.final_category_id = int(selected)
-                txn.approved_by_user = True
-                txn.needs_review = False
-                txn.save(update_fields=["final_category", "approved_by_user", "needs_review"])
+        with transaction.atomic():
+            for txn in staging_rows:
+                selected = request.POST.get(f"category_{txn.id}")
+                create_rule = request.POST.get(f"create_rule_{txn.id}") == "on"
 
-                if create_rule:
-                    learn_rule_from_transaction(request.user, txn)
+                if selected:
+                    txn.final_category_id = int(selected)
+                    txn.approved_by_user = True
+                    txn.needs_review = False
+                    txn.save(update_fields=["final_category", "approved_by_user", "needs_review"])
 
-        finalize_staging_transactions(request.user, upload, staging_rows)
-        upload.status = "finalized"
-        upload.save(update_fields=["status"])
+                    if create_rule:
+                        learn_rule_from_transaction(request.user, txn)
+
+            finalize_staging_transactions(request.user, upload, staging_rows)
+            upload.status = "finalized"
+            upload.save(update_fields=["status"])
+
         messages.success(request, "Transactions approved and saved.")
         return redirect("dashboard")
+
+    staging_rows = upload.staging_transactions.select_related(
+        "rule_category", "gemini_category", "final_category",
+        "rule_category__group", "gemini_category__group", "final_category__group"
+    ).all()
+
+    categories = Category.objects.filter(is_active=True).select_related("group").order_by("group__name", "name")
 
     return render(request, "analyzer/review.html", {
         "upload": upload,
@@ -429,6 +441,7 @@ def rule_delete(request, pk):
         return redirect("rules-list")
     return render(request, "analyzer/confirm_delete.html", {"object": rule, "title": "Delete rule"})
 
+
 @login_required
 def transactions_bulk_delete(request):
     if request.method != "POST":
@@ -446,6 +459,8 @@ def transactions_bulk_delete(request):
 
     messages.success(request, f"Deleted {deleted_count} transaction(s).")
     return redirect("transactions-list")
+
+
 @login_required
 def export_csv(request):
     form = ExportForm(request.GET or None)
