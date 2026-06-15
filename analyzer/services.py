@@ -33,8 +33,41 @@ BANK_PREFIX_PATTERNS = [
 GENERIC_UPI_TOKENS = {
     "UPI", "DR", "CR", "PAY", "PAYMENT", "COLLECT",
     "HDFC", "SBI", "ICICI", "AXIS", "KOTAK", "PNB",
-    "YBL", "IBIBO", "OKHDFC", "OKSBI", "OKICICI"
+    "YBL", "IBIBO", "OKHDFC", "OKSBI", "OKICICI",
+    "UPILITE", "BARB", "LOAD", "CBDC", "APY"
 }
+
+def extract_payee(raw_description):
+    raw = safe_text(raw_description)
+    if not raw:
+        return ""
+
+    raw = str(raw)
+    upper = raw.upper()
+
+    if upper.startswith("UPI/"):
+        parts = [safe_text(p) for p in raw.split("/") if safe_text(p)]
+        filtered = []
+
+        for p in parts:
+            pu = p.upper()
+
+            if pu in GENERIC_UPI_TOKENS:
+                continue
+            if re.fullmatch(r"\d{6,}", p):
+                continue
+            if re.fullmatch(r"[A-Za-z]{2,}\d{2,}", p):
+                continue
+            if len(p) > 24 and any(ch.isdigit() for ch in p):
+                continue
+
+            filtered.append(p)
+
+        if filtered:
+            return filtered[-1] if len(filtered) > 1 else filtered
+
+    cleaned = re.sub(r"\b(UPI|DR|CR|UPILITE|CBDC|LOAD)\b", "", raw, flags=re.I).strip(" /-*")
+    return cleaned[:80]
 
 
 def normalize_text(value):
@@ -96,38 +129,6 @@ def clean_description(text):
     return text
 
 
-def extract_payee(raw_description):
-    raw = safe_text(raw_description)
-    if not raw:
-        return ""
-
-    if isinstance(raw, list):
-        raw = " ".join(str(x) for x in raw if x is not None).strip()
-
-    if not isinstance(raw, str):
-        raw = str(raw)
-
-    upper = raw.upper()
-
-    if upper.startswith("UPI/"):
-        parts = [p.strip() for p in raw.split("/") if p.strip()]
-        filtered = []
-
-        for p in parts:
-            pu = p.upper()
-            if pu in GENERIC_UPI_TOKENS:
-                continue
-            if re.fullmatch(r"\d{6,}", p):
-                continue
-            if re.fullmatch(r"[A-Za-z]{2,}\d{2,}", p):
-                continue
-            filtered.append(p)
-
-        if filtered:
-            return filtered[0]
-
-    cleaned = re.sub(r"\b(UPI|DR|CR)\b", "", raw, flags=re.I).strip(" /-")
-    return cleaned[:80]
 
 
 def make_fingerprint(txn_date, amount, txn_type, raw_description, description, payee, notes=""):
@@ -494,17 +495,24 @@ Transactions:
 
 
 def _parse_gemini_json(text):
-    text = safe_text(text)
+    if isinstance(text, list):
+        text = " ".join(str(x) for x in text if x is not None)
+    elif text is None:
+        text = ""
+    else:
+        text = str(text)
+
+    text = text.strip()
     if not text:
         return []
 
     if text.startswith("```"):
         lines = text.splitlines()
-        if lines and lines.startswith("```"):
+        if lines and str(lines).startswith("```"):
             lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
+        if lines and str(lines[-1]).startswith("```"):
             lines = lines[:-1]
-        text = "\n".join(lines).strip()
+        text = "\n".join(str(x) for x in lines).strip()
         if text.lower().startswith("json"):
             text = text[4:].strip()
 
@@ -514,7 +522,6 @@ def _parse_gemini_json(text):
         text = text[start:end + 1]
 
     return json.loads(text)
-
 
 def run_ai_categorization(user, unknown_rows, force=False):
     if not getattr(settings, "USE_GEMINI_FALLBACK", False) and not force:
